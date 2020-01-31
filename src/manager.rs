@@ -36,4 +36,12 @@ impl Manager {
             loader,
         })
     }
+
+    pub fn get_loader(&self) -> &Loader {
+        self.loader.as_ref()
+    }
+
+    pub fn swap_buffers(&self) {
+        self.context.swap();
+    }
 }

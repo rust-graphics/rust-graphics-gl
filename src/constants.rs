@@ -1,0 +1,1 @@
+pub const COLOR_BUFFER_BIT: u32 = 16384;

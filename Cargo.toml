@@ -9,3 +9,6 @@ rust_graphics_window = {version = "*", path = "../rust-graphics-window", feature
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = {version = "*", features = ["windef", "wingdi", "minwindef", "winuser"]}
+
+[features]
+verbose_log = ["rust_graphics_window/verbose_log"]
