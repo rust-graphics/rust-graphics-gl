@@ -1,7 +1,17 @@
-#[cfg(target_os = "android")]
-use super::egl;
+#[cfg(feature = "verbose_log")]
+use log::log_i;
 #[cfg(target_os = "windows")]
 use winapi::shared::windef::{HDC, HGLRC};
+#[cfg(target_os = "android")]
+use {
+    super::egl,
+    log::log_f,
+    std::{
+        ffi::CString,
+        mem::transmute_copy,
+        ptr::{null, null_mut},
+    },
+};
 use {crate::window::Window, std::sync::Arc};
 
 pub(crate) struct Context {
@@ -12,6 +22,14 @@ pub(crate) struct Context {
     render: HGLRC,
     #[cfg(target_os = "android")]
     egl_lib: egl::Egl,
+    #[cfg(target_os = "android")]
+    display: egl::EGLDisplay,
+    #[cfg(target_os = "android")]
+    config: egl::EGLConfig,
+    #[cfg(target_os = "android")]
+    surface: egl::EGLSurface,
+    #[cfg(target_os = "android")]
+    context: egl::EGLContext,
 }
 
 impl Context {
@@ -110,7 +128,10 @@ impl Context {
 
     #[cfg(target_os = "android")]
     pub fn new(window: Arc<Window>) -> Option<Self> {
-        use std::ptr::null_mut;
+        use std::{
+            mem::transmute_copy,
+            ptr::{null, null_mut},
+        };
 
         let egl_lib = if let Some(l) = egl::Egl::new() {
             l
@@ -131,118 +152,129 @@ impl Context {
             [egl::OPENGL_ES2_BIT, 24, 4],
             [egl::OPENGL_ES2_BIT, 24, 0],
         ];
-        for c in EGL_CONFIGS {
-            // if (check_surface(c[0], c[1], c[2])) {
-            //     surface = eglCreateWindowSurface(display, config, window, nullptr);
-            //     eglQuerySurface(display, surface, EGL_WIDTH, &screen_width);
-            //     eglQuerySurface(display, surface, EGL_HEIGHT, &screen_height);
-            //     GXLOGD("Surface with OpenGL: " << c[0] << ", depth: " << c[1] << ", samples: " << c[2])
-            //     return;
-            // }
+        let mut config = null_mut();
+        let mut surface = null_mut();
+        for c in &EGL_CONFIGS {
+            if {
+                let attribs = [
+                    egl::RENDERABLE_TYPE,
+                    c[0],
+                    egl::SURFACE_TYPE,
+                    egl::WINDOW_BIT,
+                    egl::BLUE_SIZE,
+                    8,
+                    egl::GREEN_SIZE,
+                    8,
+                    egl::RED_SIZE,
+                    8,
+                    egl::DEPTH_SIZE,
+                    c[1],
+                    egl::SAMPLE_BUFFERS,
+                    if c[2] == 0 { 0 } else { 1 },
+                    egl::SAMPLES,
+                    c[2],
+                    egl::NONE,
+                ];
+                let mut num_configs = 0;
+                egl::TRUE
+                    == (egl_lib.choose_config)(
+                        display,
+                        attribs.as_ptr(),
+                        &mut config,
+                        1,
+                        &mut num_configs,
+                    )
+                    && num_configs > 0
+                    && !config.is_null()
+            } {
+                surface = (egl_lib.create_window_surface)(
+                    display,
+                    config,
+                    unsafe { transmute_copy(&window.get_window()) },
+                    null(),
+                );
+                #[cfg(feature = "verbose_log")]
+                log_i!(
+                    "Surface with OpenGL: {}, depth: {}, samples: {}",
+                    c[0],
+                    c[1],
+                    c[2]
+                );
+                break;
+            }
         }
-        None
-        // GXLOGF("No suitable surface found.")
+        if surface.is_null() {
+            #[cfg(feature = "verbose_log")]
+            log_i!("Can not create EGL Surface.");
+            return None;
+        }
+        const CONTEXT_ATTRIBS: [[egl::EGLint; 5]; 4] = [
+            [
+                egl::CONTEXT_MAJOR_VERSION,
+                3,
+                egl::CONTEXT_MINOR_VERSION,
+                2,
+                egl::NONE,
+            ],
+            [
+                egl::CONTEXT_MAJOR_VERSION,
+                3,
+                egl::CONTEXT_MINOR_VERSION,
+                1,
+                egl::NONE,
+            ],
+            [
+                egl::CONTEXT_MAJOR_VERSION,
+                3,
+                egl::CONTEXT_MINOR_VERSION,
+                0,
+                egl::NONE,
+            ],
+            [
+                egl::CONTEXT_MAJOR_VERSION,
+                2,
+                egl::CONTEXT_MINOR_VERSION,
+                0,
+                egl::NONE,
+            ],
+        ];
 
-        //     init_egl_context();
-        //     init_gles();
-        //     egl_context_initialized = true;
+        let mut context = null_mut();
+
+        for attribs in &CONTEXT_ATTRIBS {
+            context = (egl_lib.create_context)(display, config, null_mut(), attribs.as_ptr());
+            if context.is_null() {
+                continue;
+            }
+            if egl::TRUE == (egl_lib.make_current)(display, surface, surface, context) {
+                #[cfg(feature = "verbose_log")]
+                log_i!(
+                    "EGL context with OpenGL ES {}.{} created",
+                    attribs[1],
+                    attribs[3]
+                );
+                break;
+            } else {
+                context = null_mut();
+            }
+        }
+
+        if context.is_null() {
+            #[cfg(feature = "verbose_log")]
+            log_i!("Can not create EGL Context.");
+            return None;
+        }
+
+        Some(Self {
+            window,
+            egl_lib,
+            display,
+            config,
+            surface,
+            context,
+        })
     }
 
-    // void gearoenix::system::GlContext::init_gles() noexcept
-    // {
-    //     if (gles_initialized)
-    //         return;
-    //     gles_initialized = true;
-    //     if (gl::Loader::load_library(render::engine::Type::OPENGL_ES3)) {
-    //         GXLOGD("OpenGL ES3 library loaded.")
-    //         es3_supported = true;
-    //         return;
-    //     }
-    //     if (gl::Loader::load_library(render::engine::Type::OPENGL_ES2)) {
-    //         GXLOGD("OpenGL ES2 library loaded.")
-    //         return;
-    //     }
-    //     GXLOGF("No suitable OpenGL library found")
-    // }
-    // void gearoenix::system::GlContext::terminate() noexcept
-    // {
-    //     if (display != EGL_NO_DISPLAY) {
-    //         eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-    //         if (context != EGL_NO_CONTEXT) {
-    //             eglDestroyContext(display, context);
-    //         }
-    //         if (surface != EGL_NO_SURFACE) {
-    //             eglDestroySurface(display, surface);
-    //         }
-    //         eglTerminate(display);
-    //     }
-    //     display = EGL_NO_DISPLAY;
-    //     context = EGL_NO_CONTEXT;
-    //     surface = EGL_NO_SURFACE;
-    //     context_valid = false;
-    // }
-    // bool gearoenix::system::GlContext::check_surface(const EGLint opengl_version, const EGLint depth_size, const EGLint samples_size) noexcept
-    // {
-    //     const EGLint attribs[] = {
-    //         EGL_RENDERABLE_TYPE, opengl_version,
-    //         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-    //         EGL_BLUE_SIZE, 8,
-    //         EGL_GREEN_SIZE, 8,
-    //         EGL_RED_SIZE, 8,
-    //         EGL_DEPTH_SIZE, depth_size,
-    //         EGL_SAMPLE_BUFFERS, samples_size == 0 ? 0 : 1,
-    //         EGL_SAMPLES, samples_size,
-    //         EGL_NONE
-    //     };
-    //     this->depth_size = static_cast<int>(depth_size);
-    //     this->samples_size = static_cast<int>(samples_size);
-    //     EGLint num_configs;
-    //     return 0 != eglChooseConfig(display, attribs, &config, 1, &num_configs);
-    // }
-    // void gearoenix::system::GlContext::init_egl_context() noexcept
-    // {
-    //     context_valid = true;
-    //     {
-    //         GXLOGD("Trying to create OpenGL context 3")
-    //         const EGLint context_attribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
-    //         context = eglCreateContext(display, config, nullptr, context_attribs);
-    //         if (eglMakeCurrent(display, surface, surface, context) != EGL_FALSE)
-    //             return;
-    //     }
-    //     {
-    //         GXLOGD("Trying to create OpenGL context 2")
-    //         const EGLint context_attribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
-    //         context = eglCreateContext(display, config, nullptr, context_attribs);
-    //         if (eglMakeCurrent(display, surface, surface, context) != EGL_FALSE)
-    //             return;
-    //     }
-    //     GXLOGF("Can not create the required context")
-    // }
-    // gearoenix::system::GlContext::~GlContext() noexcept
-    // {
-    //     terminate();
-    // }
-    // gearoenix::system::GlContext::State gearoenix::system::GlContext::swap() noexcept
-    // {
-    //     const EGLBoolean b = eglSwapBuffers(display, surface);
-    //     if (b == 0) {
-    //         const EGLint err = eglGetError();
-    //         if (err == EGL_BAD_SURFACE) {
-    //             init_egl_surface();
-    //             return State::RUNNING;
-    //         } else if (err == EGL_CONTEXT_LOST || err == EGL_BAD_CONTEXT) {
-    //             terminate();
-    //             return State::TERMINATED;
-    //         }
-    //         GXLOGE("Unhandled error " << err)
-    //     }
-    //     return State::RUNNING;
-    // }
-    // void gearoenix::system::GlContext::invalidate() noexcept
-    // {
-    //     terminate();
-    //     egl_context_initialized = false;
-    // }
     // void gearoenix::system::GlContext::suspend() noexcept
     // {
     //     if (surface != EGL_NO_SURFACE) {
@@ -277,6 +309,33 @@ impl Context {
     //         init_egl_context();
     //     }
     // }
+
+    #[cfg(target_os = "android")]
+    pub fn swap(&self) {
+        if egl::TRUE != (self.egl_lib.swap_buffers)(self.display, self.surface) {
+            log_f!("EGL context is not valid any more. There is a bug somewhere that does not initialize the context in the correct way.");
+            //     if (b == 0) {
+            //         const EGLint err = eglGetError();
+            //         if (err == EGL_BAD_SURFACE) {
+            //             init_egl_surface();
+            //             return State::RUNNING;
+            //         } else if (err == EGL_CONTEXT_LOST || err == EGL_BAD_CONTEXT) {
+            //             terminate();
+            //             return State::TERMINATED;
+            //         }
+            //         GXLOGE("Unhandled error " << err)
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    pub fn get_function<T>(&self, s: &str) -> Option<T> {
+        let cs = CString::new(s).unwrap();
+        if let Some(f) = (self.egl_lib.get_proc_address)(cs.as_ptr()) {
+            Some(unsafe { transmute_copy(&f) })
+        } else {
+            None
+        }
+    }
 }
 
 impl Drop for Context {
@@ -286,7 +345,26 @@ impl Drop for Context {
             use winapi::shared::minwindef::FALSE;
             use winapi::um::wingdi::wglDeleteContext;
             if FALSE == unsafe { wglDeleteContext(self.render) } {
-                vxlogf!("Failed to destroy render context.");
+                log_f!("Failed to destroy render context.");
+            }
+        }
+        #[cfg(target_os = "android")]
+        {
+            if !self.display.is_null() {
+                (self.egl_lib.make_current)(self.display, null_mut(), null_mut(), null_mut());
+                if !self.context.is_null() {
+                    if egl::TRUE != (self.egl_lib.destroy_context)(self.display, self.context) {
+                        log_f!("Failed to terminate EGL context.");
+                    }
+                }
+                if !self.surface.is_null() {
+                    if egl::TRUE != (self.egl_lib.destroy_surface)(self.display, self.surface) {
+                        log_f!("Failed to terminate EGL surface.");
+                    }
+                }
+                if egl::TRUE != (self.egl_lib.terminate)(self.display) {
+                    log_f!("Failed to terminate EGL.");
+                }
             }
         }
     }

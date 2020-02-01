@@ -130,6 +130,7 @@ pub struct Loader {
         pointer: *const c_void,
     ),
     pub viewport: extern "C" fn(SInt, SInt, SizeI, SizeI),
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     _library: Linker,
     context: Arc<Context>,
 }
@@ -142,15 +143,32 @@ impl Loader {
         let library_name = "opengl32.dll";
         #[cfg(target_os = "linux")]
         let library_name = "libGL.so";
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         let _library = if let Some(l) = Linker::new(library_name) {
             l
         } else {
             log_i!("Can not load OpenGL library, {} not found.", library_name);
             return None;
         };
+
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         macro_rules! fun {
             ($n:expr) => {
-                if let Some(f) = Self::get_function(&context, &_library, concat!("gl", $n)) {
+                if let Some(f) = context.get_function(concat!("gl", $n)) {
+                    f
+                } else if let Some(f) = _library.get_function(concat!("gl", $n)) {
+                    f
+                } else {
+                    log_i!("Can not load function 'gl{}'", $n);
+                    return None;
+                }
+            };
+        }
+
+        #[cfg(target_os = "android")]
+        macro_rules! fun {
+            ($n:expr) => {
+                if let Some(f) = context.get_function(concat!("gl", $n)) {
                     f
                 } else {
                     log_i!("Can not load function 'gl{}'", $n);
@@ -229,15 +247,9 @@ impl Loader {
             validate_program: fun!("ValidateProgram"),
             vertex_attrib_pointer: fun!("VertexAttribPointer"),
             viewport: fun!("Viewport"),
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
             _library,
             context,
         })
-    }
-    fn get_function<T>(c: &Context, l: &Linker, s: &str) -> Option<T> {
-        if let Some(f) = c.get_function(s) {
-            Some(f)
-        } else {
-            l.get_function(s)
-        }
     }
 }
