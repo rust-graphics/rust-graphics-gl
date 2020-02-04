@@ -11,4 +11,4 @@ rust-graphics-window = {version = "*", path = "../rust-graphics-window", feature
 winapi = {version = "*", features = ["windef", "wingdi", "minwindef", "winuser"]}
 
 [features]
-verbose_log = ["rust_graphics_window/verbose_log"]
+verbose-log = ["rust-graphics-window/verbose-log"]

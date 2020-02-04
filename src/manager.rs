@@ -1,4 +1,4 @@
-#[cfg(feature = "verbose_log")]
+#[cfg(feature = "verbose-log")]
 use crate::window::log::log_i;
 use {
     super::{context::Context, loader::Loader},
@@ -14,21 +14,21 @@ pub struct Manager {
 
 impl Manager {
     pub fn new(window: Arc<Window>) -> Option<Self> {
-        #[cfg(feature = "verbose_log")]
+        #[cfg(feature = "verbose-log")]
         log_i!("Start of OpenGL manager.");
         let context = if let Some(context) = Context::new(window.clone()) {
             Arc::new(context)
         } else {
             return None;
         };
-        #[cfg(feature = "verbose_log")]
+        #[cfg(feature = "verbose-log")]
         log_i!("OpenGL context created.");
         let loader = if let Some(loader) = Loader::new(context.clone()) {
             Arc::new(loader)
         } else {
             return None;
         };
-        #[cfg(feature = "verbose_log")]
+        #[cfg(feature = "verbose-log")]
         log_i!("OpenGL library loaded.");
         Some(Self {
             window,
@@ -46,8 +46,8 @@ impl Manager {
     }
 }
 
-impl Listener for Manager {
-    fn on_event(&mut self, event: &Event) -> bool {
-        false
-    }
-}
+// impl Listener for Manager {
+//     fn on_event(&mut self, event: &Event) -> bool {
+//         false
+//     }
+// }

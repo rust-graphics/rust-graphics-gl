@@ -1,4 +1,4 @@
-#[cfg(feature = "verbose_log")]
+#[cfg(feature = "verbose-log")]
 use log::log_i;
 #[cfg(target_os = "windows")]
 use winapi::shared::windef::{HDC, HGLRC};
@@ -193,7 +193,7 @@ impl Context {
                     unsafe { transmute_copy(&window.get_window()) },
                     null(),
                 );
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!(
                     "Surface with OpenGL: {}, depth: {}, samples: {}",
                     c[0],
@@ -204,7 +204,7 @@ impl Context {
             }
         }
         if surface.is_null() {
-            #[cfg(feature = "verbose_log")]
+            #[cfg(feature = "verbose-log")]
             log_i!("Can not create EGL Surface.");
             return None;
         }
@@ -247,7 +247,7 @@ impl Context {
                 continue;
             }
             if egl::TRUE == (egl_lib.make_current)(display, surface, surface, context) {
-                #[cfg(feature = "verbose_log")]
+                #[cfg(feature = "verbose-log")]
                 log_i!(
                     "EGL context with OpenGL ES {}.{} created",
                     attribs[1],
@@ -260,7 +260,7 @@ impl Context {
         }
 
         if context.is_null() {
-            #[cfg(feature = "verbose_log")]
+            #[cfg(feature = "verbose-log")]
             log_i!("Can not create EGL Context.");
             return None;
         }

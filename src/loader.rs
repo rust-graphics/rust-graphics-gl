@@ -137,7 +137,7 @@ pub struct Loader {
 
 impl Loader {
     pub(crate) fn new(context: Arc<Context>) -> Option<Self> {
-        #[cfg(feature = "verbose_log")]
+        #[cfg(feature = "verbose-log")]
         log_i!("Going to load OpenGL library.");
         #[cfg(target_os = "windows")]
         let library_name = "opengl32.dll";
