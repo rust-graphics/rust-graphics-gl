@@ -1,11 +1,11 @@
 [package]
-name = "rust_graphics_gl"
+name = "rust-graphics-gl"
 version = "0.1.0"
 authors = ["Hossein Noroozpour <hossein.noroozpour@gmail.com>"]
 
 
 [dependencies]
-rust_graphics_window = {version = "*", path = "../rust-graphics-window", features = ["gl"]}
+rust-graphics-window = {version = "*", path = "../rust-graphics-window", features = ["gl"]}
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = {version = "*", features = ["windef", "wingdi", "minwindef", "winuser"]}

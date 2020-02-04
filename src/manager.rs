@@ -2,7 +2,7 @@
 use crate::window::log::log_i;
 use {
     super::{context::Context, loader::Loader},
-    crate::window::Window,
+    crate::window::{event::Listener, Window},
     std::sync::Arc,
 };
 
@@ -43,5 +43,11 @@ impl Manager {
 
     pub fn swap_buffers(&self) {
         self.context.swap();
+    }
+}
+
+impl Listener for Manager {
+    fn on_event(&mut self, event: &Event) -> bool {
+        false
     }
 }
